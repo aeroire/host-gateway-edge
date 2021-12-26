@@ -1,13 +1,42 @@
 const WebSocket = require("ws");
 const http = require("http");
+const AWS = require("aws-sdk");
 const WS_PORT = 5000;
 const WEB_PORT = 8080;
 const CHECK_INTERVAL = 10;
 
+AWS.config.update({ region: 'us-east-1' })
+var sqs = new AWS.SQS({ apiVersion: '2012-11-05' })
+
+let QueueUrl;
+
+var params = {
+  QueueName: 'AEROIRE-DEV-host-message-queue',
+};
+sqs.getQueueUrl(params, function (err, data) {
+  if (err) console.log(err, err.stack);
+  else QueueUrl = data.QueueUrl;
+});
+
+function sendSQSMessage(message) {
+  var params = {
+    DelaySeconds: 0,
+    MessageAttributes: {},
+    MessageBody: message,
+    QueueUrl: QueueUrl
+  };
+
+  sqs.sendMessage(params, function (err, data) {
+    if (err) console.log("ERROR ", err);
+    else console.log("SUCCESS ", data.MessageId);
+  })
+}
+
+
 const server = new WebSocket.Server({ port: WS_PORT });
 
 http.createServer(function (req, res) {
-  res.write('Hello World!'); 
+  res.write('Hello World!');
   res.end();
 }).listen(WEB_PORT);
 console.log("WEBSERVER ON PORT 8080 RUNNING!");
@@ -38,6 +67,7 @@ function registrationHandler(ws, payload) {
     registry[host_id].authenticated = true;
     registry[host_id].ws = ws;
     console.log(`REGISTER DONE: ${host_id}`);
+    sendSQSMessage(`REGISTER DONE: ${host_id}`)
     ws.send(
       JSON.stringify({
         message: "OK",
@@ -64,7 +94,7 @@ function handleMessage(ws, message) {
 
 server.on("connection", (socket, req) => {
   console.log(`CONNECTED to ${req.socket.remoteAddress}`);
-
+  sendSQSMessage(`CONNECTED to ${req.socket.remoteAddress}`)
   socket.isAlive = true;
   socket.on("pong", heartBeat);
 
