@@ -1,8 +1,17 @@
 const WebSocket = require("ws");
-const PORT = 5000;
+const http = require("http");
+const WS_PORT = 5000;
+const WEB_PORT = 8080;
 const CHECK_INTERVAL = 10;
 
-const server = new WebSocket.Server({ port: PORT });
+const server = new WebSocket.Server({ port: WS_PORT });
+
+http.createServer(function (req, res) {
+  res.write('Hello World!'); 
+  res.end();
+}).listen(WEB_PORT);
+console.log("WEBSERVER ON PORT 8080 RUNNING!");
+
 
 function heartBeat() {
   this.isAlive = true;
