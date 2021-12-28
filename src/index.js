@@ -1,12 +1,44 @@
 const WebSocket = require("ws");
-const http = require("http");
 const AWS = require("aws-sdk");
 const os = require("os");
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const helmet = require("helmet");
+const morgan = require("morgan");
+
+const app = express();
+app.use(helmet());
+app.use(bodyParser.json());
+app.use(cors());
+app.use(morgan('combined'));
+
+
+
 const WS_PORT = 5000;
 const WEB_PORT = 8080;
 const CHECK_INTERVAL = 10;
 const HOSTNAME = os.hostname()
 const TABLE = "host-table"
+
+
+app.post('/action', function (req, res) {
+  const data = req.body
+  const host_id = data.host_id;
+  if (!registry.hasOwnProperty(host_id)) {
+    res.send("NOT FOUND");
+    return;
+  };
+  registry[data.host_id].ws.send(
+    JSON.stringify(data)
+  );
+  res.send("OK");
+  return;
+})
+
+app.listen(WEB_PORT, function () {
+  console.log(`WEBSERVER on port ${WEB_PORT}`);
+})
 
 AWS.config.update({ region: 'us-east-1' })
 
@@ -26,19 +58,12 @@ function addHostEntry(host_id) {
     if (err) {
       console.error("Unable to add item. Error JSON:", JSON.stringify(err, null, 2));
     } else {
-      console.log("Added item:", JSON.stringify(data, null, 2));
     }
   });
 }
 
 
 const server = new WebSocket.Server({ port: WS_PORT });
-
-http.createServer(function (req, res) {
-  res.write('Hello World!');
-  res.end();
-}).listen(WEB_PORT);
-console.log("WEBSERVER ON PORT 8080 RUNNING!");
 
 
 function heartBeat() {
@@ -67,7 +92,7 @@ function registrationHandler(ws, payload) {
     registry[host_id].ws = ws;
     console.log(`REGISTER DONE: ${host_id}`);
     addHostEntry(host_id);
-    ws.send(
+    registry[host_id].ws.send(
       JSON.stringify({
         message: "OK",
       })
@@ -79,12 +104,10 @@ function registrationHandler(ws, payload) {
 }
 
 function handleMessage(ws, message) {
-  console.log(message.command);
   switch (message.command) {
     case "register":
       return registrationHandler(ws, message.payload);
     case "debug":
-      console.log(registry);
       return ws.send(JSON.stringify(registry));
     default:
       break;
@@ -122,3 +145,6 @@ const check_interval = setInterval(function check() {
     ws.ping();
   });
 }, CHECK_INTERVAL * 1000);
+
+
+
